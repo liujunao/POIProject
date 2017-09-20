@@ -22,7 +22,7 @@ import java.util.Properties;
 public class FetchExcelToDB {
 
     //将 Excel 信息存入 Mysql 数据库
-    public void fetchExcelToMysql(String path, String database, String dataTable) {
+    public boolean fetchExcelToMysql(String path, String database) {
         InputStream inputStream = this.getClass().getResourceAsStream("/db.properties");
         Properties properties = new Properties();
         Connection connection = null;
@@ -38,42 +38,46 @@ public class FetchExcelToDB {
             connection = DriverManager.getConnection(url, user, password);
             statement = connection.createStatement();
 
-            List<List<List<String>>> lists = readExcel(path);
-            for (int i = 0; i < lists.size(); i++) {
-                String databaseName = database + "_" + (i + 1);
-                statement.executeUpdate("DROP DATABASE IF EXISTS " + databaseName);
-                statement.executeUpdate("CREATE DATABASE  " + databaseName);
-            }
+            statement.executeUpdate("DROP DATABASE IF EXISTS " + database);
+            statement.executeUpdate("CREATE DATABASE  " + database);
             statement.close();
             connection.close();
+
+            List<List<List<String>>> lists = readExcel(path);
+            url = "jdbc:mysql://localhost:3306/" + database + "?useSSL=true&serverTimezone=UTC";
+            connection = DriverManager.getConnection(url, user, password);
+            statement = connection.createStatement();
             for (int i = 0; i < lists.size(); i++) {
-                String databaseName1 = database + "_" + (i + 1);
-                url = "jdbc:mysql://localhost:3306/" + databaseName1 + "?useSSL=true&serverTimezone=UTC";
-                connection = DriverManager.getConnection(url, user, password);
-                statement = connection.createStatement();
-                //创建表
-                dataTable += "_" + (i + 1);
-                if (hasDataTable(dataTable)){
+                InputStream inputStream1 = new FileInputStream(path);
+                //HSSFWorkbook 标识整个 Excel
+                Workbook hssfWorkbook = null;
+                try {
+                    hssfWorkbook = new HSSFWorkbook(inputStream1);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    inputStream1 = new FileInputStream(path);
+                    hssfWorkbook = new XSSFWorkbook(inputStream1);
+                }
+                String dataTable = hssfWorkbook.getSheetName(i);
+                if (hasDataTable(dataTable,database)) {
                     statement.executeUpdate("DROP TABLE " + dataTable);
                 }
                 String dataTableId = dataTable + "Id";
                 statement.executeUpdate("CREATE TABLE " + dataTable + "(" + dataTableId + " INT NOT NULL AUTO_INCREMENT," +
                         "PRIMARY KEY (" + dataTableId + ")" + ")ENGINE=InnoDB DEFAULT CHARSET=utf8");
-                List<List<String>> lists1 = new ArrayList<>();
-                lists1 = lists.get(i);
-                List<String> lists2 = new ArrayList<>();
-                lists2 = lists1.get(0);
+
+                List<List<String>> lists1 = lists.get(i);
+                List<String> lists2 = lists1.get(0);
                 //添加相应的字段
-                for (int j = 0; j < lists2.size(); j++) {
+                for (int j = 1; j < lists2.size(); j++) {
                     String name = lists2.get(j);
                     statement.executeUpdate("ALTER TABLE " + dataTable + " ADD " + name + " VARCHAR(225)");
                 }
                 String insertName = "";
-                for (int m = 0; m < lists2.size() - 1; m++) {
+                for (int m = 1; m < lists2.size() - 1; m++) {
                     insertName += lists2.get(m) + ",";
                 }
                 insertName += lists2.get(lists2.size() - 1);
-                System.out.println(insertName);
                 for (int k = 1; k < lists1.size(); k++) {
                     List<String> result = lists1.get(k);
                     String sql = "INSERT INTO " + dataTable + "(" + insertName + ")VALUES (";
@@ -82,17 +86,14 @@ public class FetchExcelToDB {
                     }
                     String lastList = result.get(result.size() - 1);
                     sql += "'" + lastList + "'" + ")";
-                    System.out.println(sql);
                     statement.executeUpdate(sql);
                 }
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
-        } catch (ClassNotFoundException e) {
-            e.printStackTrace();
-        } catch (SQLException e) {
-            e.printStackTrace();
+           return false;
         }
+        return true;
     }
 
     //读取 Excel 内容
@@ -117,7 +118,7 @@ public class FetchExcelToDB {
                 if (hssfSheet == null) {
                     continue;
                 }
-                for (int rowNumber = 1; rowNumber <= hssfSheet.getLastRowNum(); rowNumber++) {
+                for (int rowNumber = 0; rowNumber <= hssfSheet.getLastRowNum(); rowNumber++) {
                     Row hssfRow = hssfSheet.getRow(rowNumber);
                     int minRowCellIndex = hssfRow.getFirstCellNum();
                     int maxRowCellIndex = hssfRow.getLastCellNum();
@@ -159,14 +160,14 @@ public class FetchExcelToDB {
     }
 
     //判断是否存在相应的数据表
-    public boolean hasDataTable(String dataTable) {
+    public boolean hasDataTable(String dataTable,String database) {
 
         boolean flag = false;
         Common common = new Common();
         Connection connection = common.getConnection();
         try {
-            ResultSet resultSet = connection.getMetaData().getTables(null,null,dataTable,null);
-            if (resultSet.next()){
+            ResultSet resultSet = connection.getMetaData().getTables(database, null, dataTable, null);
+            if (resultSet.next()) {
                 flag = true;
             }
         } catch (SQLException e) {

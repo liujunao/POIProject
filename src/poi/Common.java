@@ -10,7 +10,45 @@ import java.util.*;
 //修改 properties 属性文件
 public class Common {
 
-    public void revise(String path,String key,String value){
+    //获取数据表名
+    public List<String> getDataTableName(String database) {
+        Connection connection = getConnection();
+        List<String> list = new ArrayList<>();
+        try {
+            DatabaseMetaData databaseMetaData = connection.getMetaData();
+            ResultSet resultSet = databaseMetaData.getTables(database,"root","%",new String[]{"TABLE"});
+            while (resultSet.next()){
+                list.add(resultSet.getString("TABLE_NAME"));
+            }
+            resultSet.close();
+        } catch (SQLException e) {
+            e.printStackTrace();
+        }
+        return list;
+    }
+
+    public String convertDatabaseCharsetType(String in, String type) {
+        String daUser = null;
+        if (in != null) {
+            if (type.equalsIgnoreCase("oracle")) {
+                daUser = in.toLowerCase();
+            } else if (type.equalsIgnoreCase("postgresql")) {
+                daUser = "public";
+            } else if (type.equalsIgnoreCase("mysql")) {
+                daUser = null;
+            } else if (type.equalsIgnoreCase("db2")) {
+                daUser = in.toUpperCase();
+            } else {
+                daUser = in;
+            }
+        } else {
+            daUser = "public";
+        }
+        return daUser;
+    }
+
+    //修改 properties 文件
+    public void revise(String path, String key, String value) {
         Properties properties = new Properties();
         InputStream inputStream = null;
         OutputStream outputStream = null;
@@ -21,8 +59,9 @@ public class Common {
             inputStream.close();
             outputStream = new FileOutputStream(file);
             //设值，保存
-            properties.setProperty(key,value);
-            properties.store(outputStream,null);
+            properties.setProperty(key, value);
+            properties.store(outputStream, null);
+            outputStream.flush();
             outputStream.close();
         } catch (IOException e) {
             e.printStackTrace();
@@ -33,9 +72,7 @@ public class Common {
     public Connection getConnection() {
         Properties properties = new Properties();
         String dirPath = Thread.currentThread().getContextClassLoader().getResource("").getPath();
-        System.out.println(dirPath);
         Connection connection = null;
-        Statement statement = null;
         try {
             InputStream inputStream = new FileInputStream(dirPath + "/db.properties");
             properties.load(inputStream);
@@ -57,8 +94,8 @@ public class Common {
     }
 
     //查询数据
-    public List<Map<String,Object>> query(String dataTable,Object ... args){
-        List<Map<String,Object>> list = null;
+    public List<Map<String, Object>> query(String dataTable, Object... args) {
+        List<Map<String, Object>> list = null;
         ResultSet resultSet = null;
         Connection connection = null;
         PreparedStatement preparedStatement = null;
@@ -66,14 +103,14 @@ public class Common {
         String sql = "SELECT * FROM " + dataTable;
         try {
             preparedStatement = connection.prepareStatement(sql);
-            if (args != null && args.length > 0){
-                for (int i = 0;i < args.length;i++){
-                    preparedStatement.setObject(i + 1,args[i]);
+            if (args != null && args.length > 0) {
+                for (int i = 0; i < args.length; i++) {
+                    preparedStatement.setObject(i + 1, args[i]);
                 }
             }
             resultSet = preparedStatement.executeQuery();
 
-            if (resultSet != null){
+            if (resultSet != null) {
                 list = getResultMap(resultSet);
                 connection.close();
                 preparedStatement.close();
@@ -86,18 +123,18 @@ public class Common {
     }
 
     //将 Result 转换为 List<Map<String,Object>> 类型数据
-    private List<Map<String,Object>> getResultMap(ResultSet resultSet) {
-        Map<String,Object> map = null;
-        List<Map<String,Object>>list = new ArrayList<>();
+    private List<Map<String, Object>> getResultMap(ResultSet resultSet) {
+        Map<String, Object> map = null;
+        List<Map<String, Object>> list = new ArrayList<>();
         try {
             ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
             int count = resultSetMetaData.getColumnCount();
-            while (resultSet.next()){
+            while (resultSet.next()) {
                 map = new HashMap<>();
-                for (int i = 1;i <= count;i++){
+                for (int i = 1; i <= count; i++) {
                     String key = resultSetMetaData.getColumnLabel(i);
                     Object value = resultSet.getString(i);
-                    map.put(key,value);
+                    map.put(key, value);
                 }
                 list.add(map);
             }
@@ -108,7 +145,7 @@ public class Common {
     }
 
     //获取数据表的列名
-    public List<String> queryColumnName(String dataTable){
+    public List<String> queryColumnName(String dataTable) {
         List<String> columnName = new ArrayList<>();
         Connection connection = null;
         PreparedStatement preparedStatement = null;
@@ -121,7 +158,7 @@ public class Common {
             resultSet = preparedStatement.executeQuery();
             ResultSetMetaData resultSetMetaData = resultSet.getMetaData();
             int count = resultSetMetaData.getColumnCount();
-            for (int i = 1;i <= count;i++){
+            for (int i = 1; i <= count; i++) {
                 columnName.add(resultSetMetaData.getColumnName(i));
             }
         } catch (SQLException e) {
@@ -131,7 +168,7 @@ public class Common {
     }
 
     //判断文件是否存在
-    public boolean fileExist(String fileDir){
+    public boolean fileExist(String fileDir) {
         boolean flag = false;
         File file = new File(fileDir);
         flag = file.exists();
@@ -140,15 +177,15 @@ public class Common {
     }
 
     //删除文件
-    public boolean deleteExcel(String fileDir){
+    public boolean deleteExcel(String fileDir) {
         boolean flag = false;
         File file = new File(fileDir);
         //判断目录或文件是否存在
-        if (!file.exists()){
+        if (!file.exists()) {
             return false;
-        }else {
+        } else {
             //判断是否为文件
-            if (file.isFile()){
+            if (file.isFile()) {
                 file.delete();
                 flag = true;
             }
